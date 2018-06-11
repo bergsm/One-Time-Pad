@@ -8,17 +8,16 @@
 #include <netdb.h> 
 
 #define BUFFSIZE 1000
-#define MAXSIZE 70000
+#define MAXSIZE 80000
 
-char* clientType = "e";
-
-void sendFile(char* file, int socketFD) {}
+char* clientType = "d";
 
 
 void error(const char *msg) { perror(msg); exit(0); } // Error function used for reporting issues
 
 int main(int argc, char *argv[])
 {
+    // variable declarations
 	int socketFD, portNumber, charsWritten, charsRead;
 	struct sockaddr_in serverAddress;
 	struct hostent* serverHostInfo;
@@ -56,6 +55,8 @@ int main(int argc, char *argv[])
 	if (connect(socketFD, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) < 0) // Connect socket to address
 		error("CLIENT: ERROR connecting");
 
+
+    // add client type to beginning of message
     strcat(message, clientType);
     strcat(message, messageBreak);
     
@@ -66,12 +67,15 @@ int main(int argc, char *argv[])
 	fgets(buffer, sizeof(buffer) - 1, tfp); // get text from file
     textFileLen = strlen(buffer);
 	buffer[strcspn(buffer, "\n")] = '\0'; // Remove the trailing \n that fgets adds
+
+    // check for invalid characters in the file
     for (int i=0; i<strlen(buffer); i++) {
         if ((buffer[i] < 65 || buffer[i] > 90 ) && buffer[i] != ' ') {
             fprintf(stderr, "invalid character found in text file\n");
-            exit(1);
+            exit(2);
         }
     }
+    // add file contents to message
     strcat(message, buffer);
     strcat(message, messageBreak);
     fclose(tfp);
@@ -83,12 +87,15 @@ int main(int argc, char *argv[])
 	fgets(buffer, sizeof(buffer) - 1, kfp); // Get text from file
     keyFileLen = strlen(buffer);
 	buffer[strcspn(buffer, "\n")] = '\0'; // Remove the trailing \n that fgets adds
+    
+    // check for invalid characters in the file
     for (int i=0; i<strlen(buffer); i++) {
         if ((buffer[i] < 65 || buffer[i] > 90) && buffer[i] != ' ') {
             fprintf(stderr, "invalid character found in key file\n");
-            exit(1);
+            exit(2);
         }
     }
+    // add file contents to message
     strcat(message, buffer);
     strcat(message, messageBreak);
     fclose(kfp);
@@ -96,13 +103,11 @@ int main(int argc, char *argv[])
     // check key file is long enough for text file
     if (keyFileLen < textFileLen) {
         fprintf(stderr, "key file too short for text file\n");
-        exit(1);
+        exit(2);
     }
 
     // add end of message terminator
     strcat(message, EOM);
-
-
 
 	// Send message to server
 	charsWritten = send(socketFD, message, strlen(message), 0); // Write to the server
@@ -114,11 +119,13 @@ int main(int argc, char *argv[])
 	memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer again for reuse
 	charsRead = recv(socketFD, buffer, sizeof(buffer) - 1, 0); // Read data from the socket, leaving \0 at end
 
+    // if rejected by server
     if (strcmp(buffer, "reject") == 0) {
-        fprintf(stderr, "Wrong client type\n");
+        fprintf(stderr, "Wrong server type, cannot use otp_enc_d\n");
         exit(2);
     }
-
+    
+    // if not all content was read
 	if (charsRead < 0) error("CLIENT: ERROR reading from socket");
 	printf( "%s\n", buffer);
 

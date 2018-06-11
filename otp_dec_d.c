@@ -8,35 +8,42 @@
 #include <netinet/in.h>
 
 #define BUFFSIZE 1000
-#define MAXSIZE 70000
+#define MAXSIZE 200000
 
-char* serverType = "e";
+char* serverType = "d";
 
-void encrypt(char message[], char key[]) {
+void decrypt(char message[], char key[]) {
+    
     char encChar;
 
+    // get lengths of key and message
     int keylen = strlen(key);
     int messagelen = strlen(message);
 
 
-    for (int i=0; i<keylen; i++) {
-        if (key[i] == ' ') {
-            key[i] = '[';
-        }
-    }
-
+    // change space char in message to '[' to have continguous ASCII characters for addition
     for (int i=0; i<messagelen; i++) {
         if (message[i] == ' ') {
             message[i] = '[';
         }
     }
-    
+
+    // change space char in key to '[' to have continguous ASCII characters for addition
+    for (int i=0; i<keylen; i++) {
+        if (key[i] == ' ') {
+            key[i] = '[';
+        } 
+            key[i] -= 65;
+    }
+
+    // perform pad decryption
     for (int i=0; i<messagelen; i++) {
-        encChar = (message[i]-65 + key[i]-65) % 27;
+        encChar = ((message[i]-65 - key[i])+27) % 27;
         encChar += 65;
         message[i] = encChar;
     }
-    
+
+    // change '[' char in message back to ' '
     for (int i=0; i<messagelen; i++) {
         if (message[i] == '[') {
             message[i] = ' ';
@@ -50,6 +57,8 @@ void error(const char *msg) { perror(msg); exit(1); } // Error function used for
 
 int main(int argc, char *argv[])
 {
+
+    // variable declarations
 	int listenSocketFD, establishedConnectionFD, portNumber, charsRead;
 	socklen_t sizeOfClientInfo;
 	char buffer[BUFFSIZE];
@@ -83,7 +92,6 @@ int main(int argc, char *argv[])
         // clean up other processes
         pid = waitpid(-1, &status, WNOHANG);
         while(pid > 0) {
-            //printf("cleaned up fork\n");
             pid = waitpid(-1, &status, WNOHANG);
         }   
 
@@ -97,9 +105,7 @@ int main(int argc, char *argv[])
         memset(input, '\0', MAXSIZE);
         memset(key, '\0', MAXSIZE);
 
-        // Get the message from the client and display it
-        // TODO handle potential connection errors
-
+        // fork off new process for decryption
         pid = fork();
 
         switch(pid) {
@@ -107,13 +113,15 @@ int main(int argc, char *argv[])
                 perror("Error on fork");
                 exit(1);
 
-            case 0: 
+            case 0: //if child process
                 isFork=1;
+
+                // while EOF char is not found
                 while (strstr(input, "@@") == NULL) {
 
                 memset(buffer, '\0', BUFFSIZE);
                 charsRead = recv(establishedConnectionFD, buffer, BUFFSIZE-1 , 0); // Read the client's message from the socket
-                strcat(input, buffer);
+                strcat(input, buffer); // add buffer to input
                 if (charsRead < 0) error("ERROR reading from socket");
                 }
                
@@ -127,6 +135,8 @@ int main(int argc, char *argv[])
                     exit(0);
                 } else {
 
+                    
+                // separate input contents into key and message
                 int fileNum = 0;
                 int start = 0;
                 for (int i=0; i<strlen(input); i++) {
@@ -142,19 +152,18 @@ int main(int argc, char *argv[])
                     }
                 }
 
-                    
-                encrypt(message, key);
+                // decrypt message    
+                decrypt(message, key);
 
-//                    printf("SERVER: I received this from the client: \"%s\"\n", input);
 
-                    // Send a Success message back to the client
-                    charsRead = send(establishedConnectionFD, message, strlen(message), 0); // Send success back
-                    if (charsRead < 0) error("ERROR writing to socket");
-                
-                    close(establishedConnectionFD); // Close the existing socket which is connected to the client
-                    close(listenSocketFD); // Close the listening socket
+                // Send a Success message back to the client
+                charsRead = send(establishedConnectionFD, message, strlen(message), 0); // Send success back
+                if (charsRead < 0) error("ERROR writing to socket");
+            
+                close(establishedConnectionFD); // Close the existing socket which is connected to the client
+                close(listenSocketFD); // Close the listening socket
 
-                    exit(0);
+                exit(0);
 
                 }
             } 
