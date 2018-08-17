@@ -124,9 +124,9 @@ int main(int argc, char *argv[])
     }
 
     // if not all content is read
-	if (charsRead < 0) error("CLIENT: ERROR reading from socket");
-	printf( "%s\n", buffer);
+    if (charsRead < 0) error("CLIENT: ERROR reading from socket");
+    printf( "%s\n", buffer);
 
-	close(socketFD); // Close the socket
-	return 0;
+    close(socketFD); // Close the socket
+    return 0;
 }
